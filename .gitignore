@@ -7,4 +7,4 @@ dist/
 *.whl
 */__pycache__
 /docs/build
-/docs/source/data
+/docs/source/notebooks/data
