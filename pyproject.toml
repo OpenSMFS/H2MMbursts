@@ -1,7 +1,8 @@
 [build-system]
 requires = [
-    "setuptools>=64", 
-    "setuptools_scm>=6.0",
+    "setuptools>=77", 
+    "setuptools_scm>=8.0",
+    "numpy>=1.19",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -13,6 +14,7 @@ authors = [
 description = "photon-by-photon Hidden Markov Modeling extension for smfBursts."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE.txt", ]
 keywords = ["single-molecule FRET","smFRET", "H2MM", "biophysics"]
 classifiers = [
     "Intended Audience :: Science/Research",
@@ -46,3 +48,4 @@ gui = ["matplotlib>=3.0.1", ]
 [tool.setuptools.packages.find]
 include = ['H2MMbursts*']
 
+[tool.setuptools_scm]
