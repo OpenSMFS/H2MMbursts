@@ -66,8 +66,8 @@ jobs:
         run: |
           conda install -c conda-forge pip
           python -m pip install setuptools build
-          conda install -c conda-forge pytest numpy numba scipy pandas matplotlib pytables msgpack-python phconvert pyFCS
-          python -m pip install smfbursts
+          conda install -c conda-forge pytest numpy numba scipy pandas matplotlib pytables msgpack-python phconvert
+          python -m pip install pyFCS smfbursts
       - name: Install Project
         shell: bash -l {0}
         run:
