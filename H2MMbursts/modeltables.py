@@ -3469,16 +3469,10 @@ class ntdivStatePath(StatePath):
             Therefore new = old[sort]
 
         """
-        if params.get('streams',None) is None:
-            params['streams'] = tuple(detdef.stream_ids_to_PhSel(i) for i in range(detdef.size))
-            sort = np.arange(detdef.size)
-        else:
-            params['streams'], sort = sort_phsels(params['streams'], detdef=detdef, return_index=True)
-        if 'divs' not in params:
-            raise TypeError("Must assign divs")
+        params, sort = super().param_sort_process(params, detdef)
         if len(params['divs']) != len(params['streams']):
             raise ValueError("mismatched number streams and div")
-        params['divs'] = tuple(np.asarray(div, dtype=np.uint16) for div in params['divs'])
+        params['divs'] = tuple(np.asarray(params['divs'][i], dtype=np.uint16) for i in sort)
         if any(div.ndim > 1 for div in params['divs']):
             raise ValueError("Divs must be 1d")
         params['divs'] = tuple(div.reshape(-1) for div in params['divs'])
@@ -4270,6 +4264,68 @@ class usAlexStatePath(StatePath):
     def _sort_photons_func(cls, origin:PhotonDataS, bursts, streams:Sequence[PhSel], shifts:Sequence[str]):
         indexes, times, sort = sort_usALEX_times_indexes(origin.get_table(bursts), streams, shifts)
         return dict(indexes=indexes, times=times, sort=sort)
+    
+    @classmethod
+    def param_sort_process(cls, params:dict[str:Any], detdef:DetDef)->tuple[dict[str:Any],np.ndarray[np.int64]]:
+        """
+        In a params dictonary, sort the streams so that streams are in ascending
+        order based on DetDef
+        
+        Parameters
+        ----------
+        params : dict[str:Any]
+            params dictionary to be used in StatePath based :class:`Param`.
+        detdef : DetDef
+            :class:`DetDef` of expected :class:`Param`.
+
+        Returns
+        -------
+        params : dict[str,Any]
+            Sorted params dictoinary.
+        sort : np.ndarray[np.int64]
+            Re-sorting array, value is original index, position is index for destination.
+            Therefore new = old[sort]
+
+        """
+        params, sort = super().param_sort_process(params, detdef)
+        params['shifts'] = tuple(params['shifts'][i] for i in sort)
+        return params, sort
+    
+    @classmethod
+    def sort_photons(cls, origin:PhotonDataS, statepath:Param=None, 
+                     bursts:Param=None, streams:Sequence[PhSel]=None,
+                     shifts:Sequence[str]=None)->dict[str:np.ndarray[np.ndarray]]:
+        """
+        Sort photons into indexes/times arrays for processing with |H2MM|.
+
+        Parameters
+        ----------
+        origin : PhotonDataS
+            Data from which to sort photons.
+        statepath : Param, optional
+            Definition of streams, if used cannot use bursts or streams kwargs. 
+            The default is None.
+        bursts : Param, optional
+            bursts definition, must be used with streams, and . The default is None.
+        streams : Sequence[PhSel], optional
+            Streams to inlcude in |H2MM| processing. The default is None.
+        shifts : Sequence[str], optional
+            How to shift each selected stream. The default is None.
+
+        Returns
+        -------
+        dict[str:np.ndarray[np.ndarray]]
+            Dictionary of sorted photons, each key contains a particular sort type.
+            has the following keys:
+            
+            - indexes : np.ndarray[np.ndarray[np.uint8]]
+              Photon indexes for |H2MM| processing.
+            - times : np.ndarray[np.ndarray[np.int64]]
+              Photon arrival times for |H2MM| processing
+
+        """
+        return cls._sort_photons(origin, statepath=statepath, bursts=bursts, streams=streams, shifts=shifts)
+
 
     def _get_sortpath(self):
         """

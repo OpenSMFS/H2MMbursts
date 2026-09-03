@@ -10,7 +10,7 @@ Tutorials
    notebooks/DivisorAproachTutorial
    notebooks/BlinkingRemovalTutorial
 
-.. toctreee::
+.. toctree::
    :caption: Migration Guide Examples
    :maxdepth: 1
 

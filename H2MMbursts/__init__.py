@@ -22,7 +22,7 @@ from . import erroranalysis as error
 from . import simulations as sim
 from . import fretfactory
 
-from H2MM_C import h2mm_model, factory_h2mm_model, h2mm_limits
+from H2MM_C import h2mm_model, factory_h2mm_model, optimization_limits
 
 from smfbursts.datamodel import has_matplotlib
 if has_matplotlib:

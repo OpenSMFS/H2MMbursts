@@ -9,7 +9,7 @@ from importlib.metadata import version as get_version
 project = 'H2MMbursts'
 copyright = '2026, Paul David Harris'
 author = 'Paul David Harris'
-release = get_version('H2MMbursts')
+release = '.'.join(get_version('H2MMbursts').split('.')[:3])
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

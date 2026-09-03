@@ -154,7 +154,7 @@ class H2MMSimBase(StatePathBase, ChildPhotonTable):
     column_defs = (
         ColumnDef('start', tuple(), 0, 'never', dtype=np.int64, title='start', unit='clk_p', get_func='_get_start'),
         ColumnDef('istart', tuple(), 0, 'never', dtype=np.int64, title='istart', get_func='_get_istart'),
-        ColumnDef('stop', tuple(), 0, 'never', dtype=np.int64, title='stop', unit='clk_p', get_func='_get_start'),
+        ColumnDef('stop', tuple(), 0, 'never', dtype=np.int64, title='stop', unit='clk_p', get_func='_get_stop'),
         ColumnDef('istop', tuple(), 0, 'never', dtype=np.int64, title='istop', get_func='_get_istop'),
         ColumnDef('ph_times', (PhSel, ), 0, 'never', get_func='_get_ph_times', 
                   get_derived=False, dtype=np.object_, typedef=np.dtype('<i1')), 
@@ -280,6 +280,7 @@ class H2MMSimBase(StatePathBase, ChildPhotonTable):
     _regularizecolumn_sep = BasePhotonTable._regularizecolumn_sep
     _get_brightness = BasePhotonTable._get_brightness
     _get_brightness_title = BasePhotonTable._get_brightness_title
+    _regularizecolumn_brightness = BasePhotonTable._regularizecolumn_brightness
     _iter_nph_raw = BasePhotonTable._iter_nph_raw
     _get_nph_raw_title = BasePhotonTable._get_nph_raw_title
     _get_ratio_raw = BasePhotonTable._get_ratio_raw
@@ -566,10 +567,10 @@ class usAlexH2MMSim(H2MMSimBase):
         det_map = self.param_idx_to_det_map(self.param.params.asdict, self.origin.detdef)
         dets = self.origin.detdef.get_stream_ids(phsel)
         valid_ids = np.argwhere(np.isin(det_map, dets))
-        for i, (col, idx, sort) in enumerate(zip(self.iter_column(col), 
+        for i, (c, idx, sort) in enumerate(zip(self.iter_column(col), 
                                                  self.iter_column('indexpath'), 
                                                  self.iter_column('sortpath'))):
-            out[i] = arr_type(col[np.isin(idx, valid_ids)])
+            out[i] = arr_type(c[np.isin(idx, valid_ids)])
         return out
 
 
@@ -586,9 +587,9 @@ class SimDwells(Dwells):
             Simulated statepath
     """
     parent_defs = (ParentDef('statepath', H2MMSimBase), ) #: :meta private:
-    _parent_ph_subrange = 'statepath'
     #: :meta private:
     column_defs = tuple(cdef for cdef in Dwells.column_defs if 'nano' not in cdef.name)
+    _parent_ph_subrange = 'statepath'
     
     def _iter_ph_array(self, key:str, phsel:PhSel):
         sim = self.parents['statepath']

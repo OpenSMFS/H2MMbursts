@@ -21,6 +21,7 @@ Bootstrap computes the error using the variance of the optimized models of subse
 
 .. |H2MM| replace:: H:sup:`2` MM
 .. |StatePath| replace:: :class:`bhm.StatePathBase <H2MMbursts.modeltables.StatePath>`
+.. |Param| replace:: :class:`Param <smfbursts.datamodel.tables.Param>`
 .. |scipyoptimize| replace:: `scipy.optimize.fminbound <https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.fminbound.html>`__
 """
 from typing import Literal
@@ -59,6 +60,10 @@ class BootStrapError(_ImData):
     _typeconversions = ImDict(dataid=TV_str, param=TV_Param(table_type=StatePathBase), models=TV_tuple(typdefs=TV_H2MMModel, data_proc=_proc_tupmodels))
     _required = frozenset({'dataid', 'param', 'models'})
     
+    dataid:str #: Data identifier of the source data object
+    param:Param #: |StatePath| based |Param|
+    models:hm.h2mm_model
+    
     @property
     def tp(self)->type:
         """Type of burst definition of input table"""
@@ -70,7 +75,12 @@ class BootStrapError(_ImData):
         return self.param.params
     
     @property
-    def model(self)->int:
+    def parents(self)->tupledict:
+        """Parentss of statepath to which statepath was assessed"""
+        return self.param.parents
+    
+    @property
+    def model(self)->hm.h2mm_model:
         return self.param.params['model']
     
     @property
@@ -82,6 +92,12 @@ class BootStrapError(_ImData):
     def n(self)->int:
         """Number of bootstrap optimizations used to compute error"""
         return len(self.models)
+    
+    @property
+    def model_statepaths(self)->list[Param]:
+        tp, param, parents = self.tp, self.params.asdict, self.parents
+        return [Param(tp, _dict_update(param, {'model':model}), parents) for model 
+                in self.models]
     
     @property
     def std_prior(self)->np.ndarray[np.float64]:
@@ -141,8 +157,7 @@ class BootStrapError(_ImData):
     
     def col_std(self, col:Column)->np.ndarray[np.float64]:
         """Compute expected standard deviation of a given column"""
-        return np.std([self.param.model_value(col)
-                       for model in self.models], axis=0)
+        return np.std([param.model_value(col) for param in self.model_statepaths], axis=0)
 
     def col_error(self, col:Column)->np.ndarray[np.float64]:
         """Compute expected standard error of given column"""
@@ -211,8 +226,11 @@ def prior_adjust(model:hm.h2mm_model, val:float, loc:LocSpec, outer:LocSpec=None
     if np.any(loc & inv):
         raise ValueError("loc is not subset of outer")
     outsum = prior[outer].sum()
-    prior[loc] = val* prior[loc] / prior[loc].sum() * outsum
-    prior[inv] = (1-val)* prior[inv] / prior[inv].sum() * outsum
+    lsum = prior[loc].sum()
+    isum = prior[inv].sum()
+    rat = np.exp(np.log(lsum/outsum)*(1-val)/val)
+    prior[loc] = rat* prior[loc] / prior[loc].sum() * outsum
+    prior[inv] = (1-rat)* prior[inv] / isum * outsum
     return hm.h2mm_model(prior, trans, obs)
 
 
@@ -425,11 +443,17 @@ def evalutate_ll_error(model:hm.h2mm_model, indexes:DArray, times:TArray,
     return low, high
 
 
+def _get_locarray(arr:np.ndarray[hm.h2mm_model], attr:str)->np.ndarray[np.float64]:
+    return np.array([getattr(arr[loc], attr)[loc] for loc in 
+                     product(*(range(n) for n in arr.shape))]).reshape(arr.shape)
+
+
 def statepath_ll_error(data:PhotonDataS, statepath:Param, 
                        adjust:AFunc|Literal['prior','trans','obs']='trans', 
                        loc:LocSpec=None, adj_kwargs:dict=None, targ:float=0.5,
-                       eval_kwargs:dict=None, bound_kwargs:dict=None
-                       )->tuple[hm.h2mm_model|np.ndarray[hm.h2mm_model],hm.h2mm_model|np.ndarray[hm.h2mm_model]]:
+                       eval_kwargs:dict=None, bound_kwargs:dict=None, 
+                       flatten:bool|Literal['prior','trans','obs','auto']='auto',
+                       )->tuple[hm.h2mm_model|np.ndarray[hm.h2mm_model|np.float64],hm.h2mm_model|np.ndarray[hm.h2mm_model|np.float64]]:
     r"""
     Evaluate the estimated error of a model in a :class:`StatePathBase` based 
     ``Param`` by point when given location decreases in loglikelihood by 
@@ -460,7 +484,20 @@ def statepath_ll_error(data:PhotonDataS, statepath:Param,
     bound_kwargs : dict, optional
         Kwargs  handed to |scipyoptimize|.
         The default is None.
-
+    flatten : bool | {'prior', 'trans', 'obs', 'auto'}
+        Whether or not to "flatten" the evaluated error. If 'prior', 'trans',
+        or 'obs', then the returned low/high arrays are converted from arrays
+        of ``hm.h2mm_model``, into float64 arrays, of the low/high value of the
+        given model array at the given index.
+        
+        Note that this evaluation only applied when the ``loc`` argument is None.
+        
+        If ``flatten`` is  :code`True`, the function will infer the array
+        from the value of the ``adjust`` argument.
+        If ``flatten`` is :code:`"auto"` (default), then the function will use
+        the ``loc`` and ``adjust`` arguments to infer whether the output can
+        be flattened, and which model array to use.
+        The default is 'auto'.
     Raises
     ------
     ValueError
@@ -468,14 +505,26 @@ def statepath_ll_error(data:PhotonDataS, statepath:Param,
 
     Returns
     -------
-    low : hm.h2mm_model | np.ndarray[hm.h2mm_model]
+    low : hm.h2mm_model | np.ndarray[hm.h2mm_model | np.float64]
         Lower error based on loglikelihood computation.
-    high : hm.h2mm_model  | np.ndarray[hm.h2mm_model]
+    high : hm.h2mm_model  | np.ndarray[hm.h2mm_model | np.float64]
         Higher error based on loglikelihood computation.
 
     """
     if issubclass(statepath.tp, Dwells):
         statepath = statepath.parents['statepath']
+    if isinstance(adjust, str):
+        adjust = _adjust_funcs.get(adjust, None)
+        if adjust is None:
+            raise ValueError("Invalid str adjust function")
+    adj_kwargs = dict() if adj_kwargs is None else adj_kwargs
+    if isinstance(flatten, str) and flatten == 'auto':
+        flatten = adjust in _adjust_funcs.values() and loc is None
+    if flatten:
+        if not isinstance(flatten, str):
+            flatten = {v:k for k, v in _adjust_funcs.items()}.get(adjust, None)
+        if flatten not in _adjust_funcs.keys():
+            raise ValueError(f'Cannot parse {flatten} as h2mm_model array specification')
     model = statepath.params['model']
     indexc, timec = Column(statepath, 'indexpath'), Column(statepath, 'timepath')
     if hasattr(data, 'concatenate_column'):
@@ -484,11 +533,6 @@ def statepath_ll_error(data:PhotonDataS, statepath:Param,
     else:
         indexes = data.get_column(indexc)
         times = data.get_column(timec)
-    if isinstance(adjust, str):
-        adjust = _adjust_funcs.get(adjust, None)
-        if adjust is None:
-            raise ValueError("Invalid str adjust function")
-    adj_kwargs = dict() if adj_kwargs is None else adj_kwargs
     if loc is None:
         adj_kwargs = repeat(adj_kwargs) if isinstance(adj_kwargs, dict) else adj_kwargs
         if adjust == trans_adjust:
@@ -516,4 +560,6 @@ def statepath_ll_error(data:PhotonDataS, statepath:Param,
         low, high = evalutate_ll_error(model, indexes, times, adjust, loc=loc,
                                        targ=targ, eval_kwargs=eval_kwargs, 
                                        bound_kwargs=bound_kwargs, **adj_kwargs)
+    if flatten:
+        low, high = _get_locarray(low, flatten), _get_locarray(high, flatten)
     return low, high

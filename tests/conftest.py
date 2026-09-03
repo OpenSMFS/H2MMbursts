@@ -6,8 +6,19 @@ Created on Mon Jul  6 15:49:59 2026
 @author: paul
 """
 import os
+from itertools import product
+
+import numpy as np
+
+import smfbursts as smf
+
+import H2MMbursts as bhm
 
 import pytest
+
+datadir = 'data/'
+
+bhm.optimization_limits.squarem = True
 
 # store history of failures per test class name and per index in parametrize (if parametrize used)
 _test_failed_incremental: dict[str: dict[tuple[int, ...]: str]] = dict()
@@ -75,9 +86,6 @@ def pytest_runtest_setup(item):
             if any(_test_dependency_result.get(dep, True) is not None for dep in depends):
                 pytest.skip(f"previous test failed (one of {depends})")
 
-import smfbursts as smf
-
-datadir = '../docs/source/data/'
 
 @pytest.fixture
 def hp3()->smf.PhotonData:
@@ -97,13 +105,13 @@ def yopo()->smf.PhotonDataList:
             temp = smf.photonHDF5.load(data_dir+file)
             raw.photon_data += temp.photon_data
         return raw
-    raw = load_dir(datadir+'Apo 25usec_1hr_1 ')
+    raw = load_dir(datadir+'Apo_50us ALEX_1hr/')
     data = smf.photonHDF5.regularize_dets(raw)
     data = smf.PhotonDataList(data.datas[:-12])
     return data
 
 
-@pytest.fixure(params=[(smf.PhSel('0ex0em'), smf.PhSel('0ex1em')), (smf.PhSel('0ex0em'), smf.PhSel('0ex1em'), smf.PhSel('1ex1em'))])
+@pytest.fixture(params=[(smf.PhSel('0ex0em'), smf.PhSel('0ex1em')), (smf.PhSel('0ex0em'), smf.PhSel('0ex1em'), smf.PhSel('1ex1em'))])
 def streams(request):
     return request.param
 
@@ -123,3 +131,48 @@ def brst(bg):
     gate = smf.make_geq_gate(smf.Column(br, 'nph_raw', smf.PhSel('0ex')), 50)
     gate &= smf.make_geq_gate(smf.Column(br, 'nph_raw', smf.PhSel('1ex1em')), 50)
     return br.regate(gate)
+
+
+@pytest.fixture
+def optsp(hp3, brst, bg):
+    return bhm.StatePath.optimize(hp3, brst, bhm.factory_h2mm_model(4, 3), 
+                                  streams=(smf.PhSel('0ex0em'), smf.PhSel('0ex1em'), smf.PhSel('1ex1em')))
+
+@pytest.fixture
+def statepath(brst):
+    return smf.Param(bhm.StatePath, bursts=brst, model=bhm.factory_h2mm_model(2, 3), streams=(smf.PhSel('0ex0em'), smf.PhSel('0ex1em'), smf.PhSel('1ex1em')))
+
+
+@pytest.fixture
+def dwellsp(statepath):
+    return smf.Param(bhm.Dwells, statepath=statepath)
+
+
+@pytest.fixture
+def ntstatepath(brst):
+    return smf.Param(bhm.ntdivStatePath, bursts=brst, model=bhm.factory_h2mm_model(2, 7), 
+                     streams=(smf.PhSel('0ex0em'), smf.PhSel('0ex1em'), smf.PhSel('1ex1em')),
+                     divs=[np.array([2500, 2600]), np.array([2600,]), np.array([300])])
+
+
+@pytest.fixture
+def dwellntsp(ntstatepath):
+    return smf.Param(bhm.Dwells, statepath=ntstatepath)
+
+
+@pytest.fixture
+def usstatepath(brst):
+    return smf.Param(bhm.usAlexStatePath, bursts=brst, model=bhm.factory_h2mm_model(2, 3), 
+                     streams=(smf.PhSel('0ex0em'), smf.PhSel('0ex1em'), smf.PhSel('1ex1em')),
+                     shifts=('base', 'base', 'neven:0'))
+
+
+@pytest.fixture
+def dwellussp(usstatepath):
+    return smf.Param(bhm.Dwells, statepath=usstatepath)
+
+
+@pytest.fixture(params=tuple(f'{d}{t}:0' for d, t in product(('c', 'n'), ('even', 'shift', 'rand0x2af'))))
+def usalexshifts(request):
+    return ['base', 'base', request.param]
+
