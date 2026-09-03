@@ -24,7 +24,7 @@ jobs:
       - uses: actions/cache@v6
         id: filecache
         with:
-          path: ./docs/source/notebooks/data
+          path: ./tests/data
           enableCrossOsArchive: true
           key: testfiles
 
@@ -44,7 +44,7 @@ jobs:
         id: cache-action
         uses: actions/cache/restore@v6
         with:
-          path: ./docs/source/notebooks/data
+          path: ./tests/data
           key: testfiles
           enableCrossOsArchive: true
       - name: Install Conda
