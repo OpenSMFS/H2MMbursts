@@ -33,6 +33,7 @@ dependencies = [
     "numpy>=1.19",
     "pandas>=2.0",
     "smfbursts",
+    "H2MM_C>=2.2.1"
 ]
 
 [project.urls]
