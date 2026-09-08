@@ -8,6 +8,14 @@ burstH2MM documentation
 
 ``H2MMbursts`` is an add-on module to ``smfbursts`` for |H2MM| analysis.
 
+Currently, H2MMbursts is available on PIP.
+
+Install with
+
+``pip install h2mmbursts``
+
+Once smfbursts is available on conda-forge, the process will be initiated for H2MMbursts to also be uploaded to conda-forge.
+
 .. toctree::
     :maxdepth: 2
     :caption: Contents:
