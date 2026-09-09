@@ -1671,16 +1671,11 @@ class StatePathBase(Table):
 
         """
         if as_array:
-            return np.array([cls.ICLph(statepath, d) for d in origin.datas])
-        if from_flag:
-            if (flag := statepath.get_flag(f'dataID{origin.dataID}')) is not None:
-                if 'h2mm' in flag and 'pathbic' in flag['h2mm']:
-                    return flag['h2mm']['pathbic']
-        arrays = statepath.tp._sort_photons(origin, statepath=statepath)
-        _, _, ll, icl = _viterbi_path(statepath.params['model'], arrays['indexes'], arrays['times'])
-        if from_flag:
-            statepath.update_flag((f'dataID{origin.dataID}', 'h2mm', 'icl'), icl)
-        return icl
+            return np.array([cls.ICLph(statepath, d, from_flag=True) for d in origin.datas])
+        icl = statepath.ICL(origin, from_flag=from_flag)
+        nphot = statepath.nphot(origin, from_flag=from_flag)
+        return icl / nphot
+
 
     @tableproperty
     def pathBIC(cls, statepath:Param, origin:PhotonDataS, 
@@ -1740,8 +1735,8 @@ class StatePathBase(Table):
             return np.array([cls.pathBICph(statepath, d, from_flag=True) for d in origin.datas])
         pathbic = statepath.pathBIC(origin, from_flag=from_flag)
         nphot = statepath.nphot(origin, from_flag=from_flag)
-        return pathbic / nphot    
-    
+        return pathbic / nphot
+
     @parammethod(origin_as_kw=True)
     def model_streams(cls, statepath:Param, phsel:PhSel, origin:PhotonDataS=None, strict:bool=True)->np.ndarray[np.int64]:
         """
